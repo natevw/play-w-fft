@@ -119,7 +119,7 @@
           bArr = imag.map(n => n / imag.length);
       if (!rawOut) {
         let mag = aArr.map((n, idx) => Math.hypot(n, bArr[idx])),
-            phs = mag.map((m, idx) => (m > 0.01) ? Math.atan2(aArr[idx], bArr[idx]) / Math.PI : 0);
+            phs = mag.map((m, idx) => (m > 0.01) ? Math.atan2(bArr[idx], aArr[idx]) / Math.PI : 0);
         aArr = mag;
         bArr = phs;
       }
