@@ -9,14 +9,14 @@
     <label>
       2 ** <input class="count" type="number" value=9> samples
     </label> @ <label>
-      <input class="rate" type="number" value=2000> samples/second.
+      <input class="rate" type="number" value=2048> samples/second.
     </label>
   <div>
   
   <div id=wave0>
     <label>
       Amplitude (%)
-      <input class="amp" type="range" min=0 max=100>
+      <input class="amp" type="range" min=0 max=100 value=100>
     </label>
     <label>
       Frequency (Hz)
@@ -33,6 +33,7 @@
   
   <h2>Output</h2>
   <canvas id=out_viz>[output visualizer]</canvas>
+  <label><input id="raw_out" type="checkbox"> raw values</label>
   
   <script src="./fft.js"></script>
   <script>
@@ -46,7 +47,8 @@
       let a = form.querySelector(".amp").value,
           f = form.querySelector(".freq").value,
           p = form.querySelector(".phase").value;
-      return {numSamples:2**n,samplesPerSecond:r,a,f,p};
+      let o = document.querySelector("#raw_out").checked;
+      return {numSamples:2**n,samplesPerSecond:r,a,f,p, rawOut:o};
     }
     
     let fft = null, zeroes = [];
@@ -63,7 +65,7 @@
       let real = [...wave], imag = [...zeroes];
       fft.forward(real, imag);
       fftShift(real); fftShift(imag);
-      redrawOutput(real, imag);
+      redrawOutput(real, imag, vals);
     }
     document.querySelector("#buff").addEventListener('input', update, false);
     form.addEventListener('input', update, false);
@@ -99,7 +101,7 @@
       ctx.fillText(`Phase: ${p}º`, LX, LY + 3 * LH);
     }
     
-    function redrawOutput(real, imag) {
+    function redrawOutput(real, imag, {rawOut}) {
       const canvas = document.querySelector("#out_viz");
       const ctx = canvas.getContext("2d");
       ctx.fillStyle = "black";
@@ -113,27 +115,34 @@
       ctx.lineTo(canvas.width, 3 * canvas.height / 4);
       ctx.stroke();
       
+      let aArr = real.map(n => n / real.length),
+          bArr = imag.map(n => n / imag.length);
+      if (!rawOut) {
+        let mag = aArr.map((n, idx) => Math.hypot(n, bArr[idx])),
+            phs = mag.map((m, idx) => (m > 0.01) ? Math.atan2(aArr[idx], bArr[idx]) / Math.PI : 0);
+        aArr = mag;
+        bArr = phs;
+      }
+      
       ctx.beginPath();
       ctx.strokeStyle = "white";
-      const y0real = 1 * canvas.height / 4;
-      real.forEach((n, idx) => {
-        n /= real.length;
-        const x = canvas.width * idx / real.length;
+      const y0a = 1 * canvas.height / 4;
+      aArr.forEach((n, idx) => {
+        const x = canvas.width * idx / aArr.length;
         const y = n * canvas.height / 4;
-        ctx.moveTo(x, y0real);
-        ctx.lineTo(x, y0real - y);
+        ctx.moveTo(x, y0a);
+        ctx.lineTo(x, y0a - y);
       });
       ctx.stroke();
       
       ctx.beginPath();
       ctx.strokeStyle = "white";
-      let y0imag = 3 * canvas.height / 4;
-      imag.forEach((n, idx) => {
-        n /= imag.length;
-        const x = canvas.width * idx / imag.length;
+      let y0b = 3 * canvas.height / 4;
+      bArr.forEach((n, idx) => {
+        const x = canvas.width * idx / bArr.length;
         const y = n * canvas.height / 4;
-        ctx.moveTo(x, y0imag);
-        ctx.lineTo(x, y0imag - y);
+        ctx.moveTo(x, y0b);
+        ctx.lineTo(x, y0b - y);
       });
       ctx.stroke();
       
