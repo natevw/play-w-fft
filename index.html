@@ -7,7 +7,7 @@
   
   <div id=buff>
     <label>
-      <input class="count" type="number" value=512> samples
+      2 ** <input class="count" type="number" value=9> samples
     </label> @ <label>
       <input class="rate" type="number" value=2000> samples/second.
     </label>
@@ -28,11 +28,16 @@
     </label>
   </div>
   
-  <canvas id=viz>[visualizer]</canvas>
+  <h2>Input</h2>
+  <canvas id=in_viz>[input visualizer]</canvas>
   
+  <h2>Output</h2>
+  <canvas id=out_viz>[output visualizer]</canvas>
+  
+  <script src="./fft.js"></script>
   <script>
     const DEG2RAD = Math.PI / 180;
-    const AMP_SCALE = 127 / 100;
+    const AMP_SCALE = 1 / 100;
     
     const form = document.querySelector("#wave0");
     function readVals() {
@@ -41,20 +46,30 @@
       let a = form.querySelector(".amp").value,
           f = form.querySelector(".freq").value,
           p = form.querySelector(".phase").value;
-      return {numSamples:n,samplesPerSecond:r,a,f,p};
+      return {numSamples:2**n,samplesPerSecond:r,a,f,p};
     }
+    
+    let fft = null, zeroes = [];
     function update() {
       const vals = readVals();
       const wave = genWave(vals);
-      console.log(wave);
-      redraw(wave, vals);
+      redrawInput(wave, vals);
+      
+      if (fft?.n != wave.length) {
+        fft = new FFTNayuki(wave.length);
+        zeroes = Array(wave.length).fill(0);
+      }
+      
+      let real = [...wave], imag = [...zeroes];
+      fft.forward(real, imag);
+      redrawOutput(real, imag);
     }
     document.querySelector("#buff").addEventListener('input', update, false);
     form.addEventListener('input', update, false);
     
-    const canvas = document.querySelector("#viz");
-    const ctx = canvas.getContext("2d");
-    function redraw(wave, {a,f,p}) {
+    function redrawInput(wave, {a,f,p}) {
+      const canvas = document.querySelector("#in_viz");
+      const ctx = canvas.getContext("2d");
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
@@ -67,11 +82,11 @@
       ctx.strokeStyle = "green";
       wave.forEach((n, idx) => {
         const x = canvas.width * idx / wave.length;
-        const y = (1 + n / 127) * (canvas.height / 2);
+        const y = (1 + n) * (canvas.height / 2);
         ctx.moveTo(x, canvas.height / 2);
         ctx.lineTo(x, y);
-        ctx.stroke();
       });
+      ctx.stroke();
       
       
       const LX = 5;
@@ -82,6 +97,49 @@
       ctx.fillText(`Frequency: ${f} Hz`, LX, LY + 2 * LH);
       ctx.fillText(`Phase: ${p}º`, LX, LY + 3 * LH);
     }
+    
+    function redrawOutput(real, imag) {
+      const canvas = document.querySelector("#out_viz");
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.beginPath();
+      ctx.strokeStyle = "grey";
+      ctx.moveTo(0, 1 * canvas.height / 4);
+      ctx.lineTo(canvas.width, 1 * canvas.height / 4);
+      ctx.moveTo(0, 3 * canvas.height / 4);
+      ctx.lineTo(canvas.width, 3 * canvas.height / 4);
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.strokeStyle = "white";
+      const y0real = 1 * canvas.height / 4;
+      real.forEach((n, idx) => {
+        n /= real.length;
+        const x = canvas.width * idx / real.length;
+        const y = n * canvas.height / 4;
+        ctx.moveTo(x, y0real);
+        ctx.lineTo(x, y0real + y);
+      });
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.strokeStyle = "white";
+      let y0imag = 3 * canvas.height / 4;
+      imag.forEach((n, idx) => {
+        n /= imag.length;
+        const x = canvas.width * idx / imag.length;
+        const y = n * canvas.height / 4;
+        ctx.moveTo(x, y0imag);
+        ctx.lineTo(x, y0imag + y);
+      });
+      ctx.stroke();
+      
+      ctx.fillStyle = "white";
+      ctx.fillText(`N=${real.length}`, 5, 15);
+    }
+    
     update();
     
     
@@ -89,8 +147,7 @@
       let arr = new Array(n);
       for (let i = 0; i < n; ++i) {
         let t = i / r;    // t = (i / n) * l; l = n / r
-        let s = AMP_SCALE * a * Math.sin(2 * Math.PI * f * t + p * DEG2RAD);
-        arr[i] = Math.round(s);
+        arr[i] = AMP_SCALE * a * Math.sin(2 * Math.PI * f * t + p * DEG2RAD);
       }
       return arr;
     }
